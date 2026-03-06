@@ -55,6 +55,11 @@
   const confirmCancel = document.getElementById('confirm-cancel');
   const confirmDelete = document.getElementById('confirm-delete');
 
+  const photoInput = document.getElementById('photo');
+  const photoPreview = document.getElementById('photo-preview');
+  const photoPlaceholder = document.getElementById('photo-placeholder');
+  const removePhotoBtn = document.getElementById('remove-photo');
+
   const fields = {
     name: document.getElementById('name'),
     email: document.getElementById('email'),
@@ -67,9 +72,53 @@
     name: document.getElementById('name-error'),
     email: document.getElementById('email-error'),
     phone: document.getElementById('phone-error'),
+    photo: document.getElementById('photo-error'),
   };
 
+  let currentPhotoData = null; // base64 data URL
+
   let pendingDeleteId = null;
+
+  // --- Photo helpers ---
+  const MAX_PHOTO_SIZE = 1 * 1024 * 1024; // 1 MB
+
+  function showPhotoPreview(dataUrl) {
+    photoPreview.src = dataUrl;
+    photoPreview.hidden = false;
+    photoPlaceholder.hidden = true;
+    removePhotoBtn.hidden = false;
+  }
+
+  function clearPhotoPreview() {
+    currentPhotoData = null;
+    photoPreview.src = '';
+    photoPreview.hidden = true;
+    photoPlaceholder.hidden = false;
+    removePhotoBtn.hidden = true;
+    photoInput.value = '';
+    errors.photo.textContent = '';
+  }
+
+  photoInput.addEventListener('change', () => {
+    const file = photoInput.files[0];
+    errors.photo.textContent = '';
+    if (!file) return;
+
+    if (file.size > MAX_PHOTO_SIZE) {
+      errors.photo.textContent = 'File exceeds 1 MB limit.';
+      photoInput.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      currentPhotoData = e.target.result;
+      showPhotoPreview(currentPhotoData);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  removePhotoBtn.addEventListener('click', clearPhotoPreview);
 
   // --- Validation ---
   function validateForm() {
@@ -77,6 +126,7 @@
     errors.name.textContent = '';
     errors.email.textContent = '';
     errors.phone.textContent = '';
+    errors.photo.textContent = '';
 
     if (!fields.name.value.trim()) {
       errors.name.textContent = 'Name is required.';
@@ -142,8 +192,14 @@
     }
 
     emptyMsg.hidden = true;
-    contactList.innerHTML = contacts.map(c => `
+    contactList.innerHTML = contacts.map(c => {
+      const initial = (c.name || '?')[0].toUpperCase();
+      const avatarHtml = c.photo
+        ? `<img class="contact-photo" src="${c.photo}" alt="">`
+        : `<div class="contact-avatar">${escapeHtml(initial)}</div>`;
+      return `
       <div class="contact-card" data-id="${c.id}">
+        ${avatarHtml}
         <div class="contact-info">
           <div class="contact-name">${escapeHtml(c.name)}</div>
           ${c.email ? `<div class="contact-detail">${escapeHtml(c.email)}</div>` : ''}
@@ -155,8 +211,8 @@
           <button class="btn btn-secondary btn-icon edit-btn" data-id="${c.id}" title="Edit">Edit</button>
           <button class="btn btn-danger btn-icon delete-btn" data-id="${c.id}" title="Delete">Delete</button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   }
 
   // --- Modal Helpers ---
@@ -171,6 +227,15 @@
     errors.name.textContent = '';
     errors.email.textContent = '';
     errors.phone.textContent = '';
+    errors.photo.textContent = '';
+
+    if (contact && contact.photo) {
+      currentPhotoData = contact.photo;
+      showPhotoPreview(contact.photo);
+    } else {
+      clearPhotoPreview();
+    }
+
     modalOverlay.hidden = false;
     fields.name.focus();
   }
@@ -178,6 +243,7 @@
   function closeModal() {
     modalOverlay.hidden = true;
     contactForm.reset();
+    clearPhotoPreview();
   }
 
   // --- Event Listeners ---
@@ -198,6 +264,7 @@
       phone: fields.phone.value.trim(),
       address: fields.address.value.trim(),
       notes: fields.notes.value.trim(),
+      photo: currentPhotoData || '',
     };
 
     const id = contactIdInput.value;
